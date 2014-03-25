@@ -47,6 +47,7 @@ class ChefRundeck < Sinatra::Base
     attr_accessor :project_config
     attr_accessor :cache_timeout
     attr_accessor :partial_search
+    attr_accessor :node_attr
 
     def configure
       Chef::Config.from_file(ChefRundeck.config_file)
@@ -86,7 +87,7 @@ class ChefRundeck < Sinatra::Base
     end
   end
 
-  def build_project (project="default", pattern="*:*", username=ChefRundeck.username, hostname="fqdn", custom_attributes=nil)
+  def build_project (project="default", pattern="*:*", username=ChefRundeck.username, hostname="#{ChefRundeck.node_attr || 'fqdn'}", custom_attributes=nil)
     response = nil
     begin
 
@@ -98,22 +99,22 @@ class ChefRundeck < Sinatra::Base
       results = []
       if ChefRundeck.partial_search then
         keys = { 'name' => ['name'],
-                 'kernel_machine' => [ 'kernel', 'machine' ],
-                 'kernel_os' => [ 'kernel', 'os' ],
-                 'fqdn' => [ 'fqdn' ],
-                 'run_list' => [ 'run_list' ],
-                 'roles' => [ 'roles' ],
-                 'recipes' => [ 'recipes' ],
-                 'chef_environment' => [ 'chef_environment' ],
-                 'platform' => [ 'platform'],
-                 'platform_version' => [ 'platform_version' ],
-                 'hostname' => [hostname]
+                'kernel_machine' => [ 'kernel', 'machine' ],
+                'kernel_os' => [ 'kernel', 'os' ],
+                'fqdn' => [ 'fqdn' ],
+                'run_list' => [ 'run_list' ],
+                'roles' => [ 'roles' ],
+                'recipes' => [ 'recipes' ],
+                'chef_environment' => [ 'chef_environment' ],
+                'platform' => [ 'platform'],
+                'platform_version' => [ 'platform_version' ],
+                'hostname' => [hostname]
                }  
         if !custom_attributes.nil? then
           custom_attributes.each do |attr|
-          attr_name = attr.gsub('.', '_')
-          attr_value = attr.split('.')
-          keys[attr_name] = attr_value
+            attr_name = attr.gsub('.', '_')
+            attr_value = attr.split('.')
+            keys[attr_name] = attr_value
           end
         end
         # do search
@@ -165,13 +166,14 @@ class ChefRundeck < Sinatra::Base
 end
 
 def build_node (node, username, hostname, custom_attributes)
-      #--
-      # Certain features in Rundeck require the osFamily value to be set to 'unix' to work appropriately. - SRK
-      #++
-      data = ''
-      os_family = node['kernel_os'] =~ /winnt|windows/i ? 'winnt' : 'unix'
-      nodeexec = node['kernel_os'] =~ /winnt|windows/i ? "node-executor=\"overthere-winrm\"" : ''
-      data << <<-EOH
+  #--
+  # Certain features in Rundeck require the osFamily value to be set to 'unix' to work appropriately. - SRK
+  #++
+  data = ''
+  os_family = node['kernel_os'] =~ /winnt|windows/i ? 'winnt' : 'unix'
+  nodeexec = node['kernel_os'] =~ /winnt|windows/i ? "node-executor=\"overthere-winrm\"" : ''
+  node_attr = "#{ChefRundeck.node_attr}"
+  data << <<-EOH
 <node name="#{xml_escape(node['fqdn'])}" #{nodeexec} 
       type="Node" 
       description="#{xml_escape(node['name'])}"
@@ -187,18 +189,18 @@ def build_node (node, username, hostname, custom_attributes)
       hostname="#{xml_escape(node['hostname'])}"
       editUrl="#{xml_escape(ChefRundeck.web_ui_url)}/nodes/#{xml_escape(node['name'])}/edit" #{custom_attributes.nil? ? '/': ''}>
 EOH
-     if !custom_attributes.nil? then
-       custom_attributes.each do |attr|
-         attr_name = attr
-         attr_value = node[attr.gsub('.','_')]
-         data << <<-EOH
+  if !custom_attributes.nil? then
+    custom_attributes.each do |attr|
+      attr_name = attr
+      attr_value = node[attr.gsub('.','_')]
+      data << <<-EOH
       <attribute name="#{attr_name}"><![CDATA[#{attr_value}]]></attribute>
 EOH
-       end
-       data << "</node>"
-     end
+    end
+    data << "</node>"
+  end
 
-  return data
+      return data
 end
 
 def get_custom_attr (obj, params)
@@ -215,30 +217,30 @@ end
 
 # Convert results to be compatiable with Chef 11 format
 def convert_results(results, hostname, custom_attributes)
- new_results = []
- results.each do |node|
-   n = {}
-   n['name'] = node.name
-   n['chef_environment'] = node.chef_environment
-   n['run_list'] = node.run_list
-   n['recipes'] = !node.run_list.nil? ? node.run_list.recipes : nil
-   n['roles'] = !node.run_list.nil? ? node.run_list.roles : nil
-   n['fqdn'] = node['fqdn']
-   n['hostname'] = node[hostname.to_sym]
-   n['kernel_machine'] = !node['kernel'].nil? ? node['kernel']['machine'] : nil
-   n['kernel_os'] = !node['kernel'].nil? ? node['kernel']['os'] : nil
-   n['platform'] = node['platform']
-   n['platform_version'] = node['platform_version']
-   
-   if !custom_attributes.nil? then
-     custom_attributes.each do |attr|
-       ps_name = attr.gsub('.','_')
-       n[ps_name] = get_custom_attr(node, attr.split('.'))
-     end
-   end
-   new_results << n
- end 
- return new_results
+  new_results = []
+  results.each do |node|
+    n = {}
+    n['name'] = node.name
+    n['chef_environment'] = node.chef_environment
+    n['run_list'] = node.run_list
+    n['recipes'] = !node.run_list.nil? ? node.run_list.recipes : nil
+    n['roles'] = !node.run_list.nil? ? node.run_list.roles : nil
+    n['fqdn'] = node['fqdn']
+    n['hostname'] = node[hostname.to_sym]
+    n['kernel_machine'] = !node['kernel'].nil? ? node['kernel']['machine'] : nil
+    n['kernel_os'] = !node['kernel'].nil? ? node['kernel']['os'] : nil
+    n['platform'] = node['platform']
+    n['platform_version'] = node['platform_version']
+    
+    if !custom_attributes.nil? then
+      custom_attributes.each do |attr|
+        ps_name = attr.gsub('.','_')
+        n[ps_name] = get_custom_attr(node, attr.split('.'))
+      end
+    end
+    new_results << n
+  end 
+  return new_results
 end
 
 
@@ -313,13 +315,13 @@ def partial_search(type, query='*:*', *args, &block)
   # If you pass a block, or have the start or rows arguments, do raw result parsing
   if Kernel.block_given? || args_hash[:start] || args_hash[:rows]
     PartialSearch.new.search(type, query, args_hash, &block)
- 
-  # Otherwise, do the iteration for the end user
+    
+    # Otherwise, do the iteration for the end user
   else
     results = Array.new
     PartialSearch.new.search(type, query, args_hash) do |o|
-        results << o
+      results << o
     end
-     results
+    results
   end
 end

@@ -92,7 +92,14 @@ class ChefRundeckCLI
      :long => "--partial-search TRUE/FALSE",
      :description => "Enables partial searching, Chef 11 or greater.",
      :default => "false"
+
+  option :node_attr,
+  :short => "-A",
+  :long => "--node-attr ATTRIBUTE",
+  :description => "The node attribute to use to populate 'hostname' attribute",
+  :default => "hostname"
 end
+
 
 cli = ChefRundeckCLI.new
 cli.parse_options
@@ -106,6 +113,7 @@ ChefRundeck.project_config = cli.config[:project_config]
 ChefRundeck.environment = cli.config[:env].to_sym
 ChefRundeck.cache_timeout = cli.config[:cache_timeout].to_i
 ChefRundeck.partial_search = cli.config[:partial_search] == "true"
+ChefRundeck.node_attr = cli.config[:node_attr]
 ChefRundeck.configure
 
 begin
